@@ -104,6 +104,71 @@ The maintainer's own README lists these as alternatives for a similar
 approach: [`fzmovies-api`](https://github.com/Simatwa/fzmovies-api) (movies)
 and [`fzseries-api`](https://github.com/Simatwa/fzseries-api) (TV series).
 
+## Known issue: 403 Forbidden on `/api/files` (download resolution)
+
+If `/api/search` and `/api/details` work but `/api/files` (or `/api/download`)
+fails with something like:
+
+```
+403 Forbidden for url 'https://h5.aoneroom.com/wefeed-h5-bff/web/subject/download?...'
+```
+
+Two different things could be causing this — the Dockerfile now addresses
+the first one, but the second one has no code-level fix:
+
+1. **Missing dependency.** moviebox-api's own docs install it with
+   `pip install moviebox-api --no-deps` followed by manually installing
+   `pydantic==2.9.2 rich click bs4 httpx throttlebuster`. A plain
+   `pip install moviebox-api` (what this project originally did) may not
+   pull in `throttlebuster` the same way — and going by its name and the
+   fact the maintainer calls it out specifically, it may matter for this
+   more heavily-protected endpoint. **The Dockerfile now installs the
+   exact documented sequence** — redeploy and retest.
+
+2. **IP-based Cloudflare blocking.** Multiple independent "Moviebox API"
+   wrapper projects specifically advertise "Cloudflare bypass" as a
+   feature for this exact download-resolution endpoint. A common pattern
+   for that kind of protection is blocking known cloud/hosting-provider IP
+   ranges (Render included) outright, while letting residential IPs
+   through — since scrapers overwhelmingly run from cloud IPs. If that's
+   what's happening, **no dependency or code change fixes it** — it's a
+   network-level block, not a bug.
+
+**How to tell which one you're hitting:** redeploy with the updated
+Dockerfile and retest `/api/files`. If it starts working, it was #1. If it
+still 403s identically, it's almost certainly #2 — at that point, the
+realistic options are either a different library built specifically around
+Cloudflare bypass (like the `fzmovies-api`/`fzseries-api` alternatives
+mentioned above, or other "Cloudflare bypass" wrapper projects that exist
+for this same site), or routing outbound requests through a residential
+proxy — both bigger changes than a quick patch, and probably more effort
+than a learning/portfolio project needs. Worth treating as a real lesson in
+why unofficial scrapers are inherently fragile, rather than chasing an
+arms race.
+
+## Render free-tier considerations
+
+Worth knowing before you build on top of this:
+
+- **Cold starts.** Free instances spin down after ~15 min idle. First
+  request after that can take 30-60s while it wakes back up — build that
+  into your Movie Hub's loading state, same as the TikTok downloader.
+- **512MB RAM.** Fine for search/details/files (small JSON responses). Full
+  movie downloads via `/api/download` load the whole file before responding
+  — for anything multi-GB, that risks hitting the memory ceiling or being
+  killed mid-request. This is the actual reason the README suggests linking
+  directly to the raw media URL instead of proxying large files through
+  this server.
+- **No persistent disk on the free plan.** Downloaded files exist only
+  during that request's lifetime (which is exactly what the cleanup logic
+  in `main.py` assumes) — don't rely on anything being cached between
+  requests.
+- **Possible IP-range blocking**, per the 403 section above — free-tier
+  Render IPs are shared/well-known, which may make this worse than a paid
+  instance with a dedicated IP (though no guarantee a paid plan avoids it
+  either, if it's genuine datacenter-range blocking rather than
+  free-tier-specific).
+
 ## Running locally
 
 ```bash
