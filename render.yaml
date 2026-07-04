@@ -1,0 +1,53 @@
+services:
+  - type: web
+    name: cymor-movie-api
+    runtime: python
+
+    plan: free
+
+    region: frankfurt
+
+    branch: main
+
+    autoDeploy: true
+
+    rootDir: .
+
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+
+    startCommand: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port $PORT
+
+    healthCheckPath: /health
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+
+      - key: ENVIRONMENT
+        value: production
+
+      - key: APP_NAME
+        value: Cymor Movie API
+
+      - key: VERSION
+        value: 1.0.0
+
+      - key: CACHE_ENABLED
+        value: "true"
+
+      - key: CACHE_TTL
+        value: "600"
+
+      - key: CACHE_MAXSIZE
+        value: "1000"
+
+      - key: REQUEST_TIMEOUT
+        value: "30"
+
+      - key: RATE_LIMIT
+        value: "120/minute"
