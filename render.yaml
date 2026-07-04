@@ -9,8 +9,19 @@ services:
         value: 8000
       - key: CYMOR_HUB_ORIGIN
         value: "*"
-      # Optional — only set this if the default moviebox.ph mirror gets
-      # blocked. Discover alternatives by running `moviebox v1 mirror-hosts`
-      # locally (requires the [cli] extra) — see README.
+
+      # ---- Tier 1: try a different mirror first (free, zero code change) ----
+      # Known alternates (per github.com/Simatwa/moviebox-api/issues/27):
+      # moviebox.ph, moviebox.ke, moviebox.pk, moviebox.id, movieboxapp.in,
+      # netnaija.video, netnaija.com, sflix.film, moviebox.ng
       # - key: MOVIEBOX_API_HOST
-      #   value: h5.aoneroom.com
+      #   value: moviebox.ph
+
+      # ---- Tier 2: route through a proxy (costs money, only if Tier 1 fails) ----
+      # httpx (used internally by moviebox-api) honours these by default —
+      # not guaranteed to work since we can't confirm the library doesn't
+      # override that, but worth trying before anything more invasive.
+      # - key: HTTP_PROXY
+      #   value: http://username:password@proxy-host:port
+      # - key: HTTPS_PROXY
+      #   value: http://username:password@proxy-host:port

@@ -106,45 +106,62 @@ and [`fzseries-api`](https://github.com/Simatwa/fzseries-api) (TV series).
 
 ## Known issue: 403 Forbidden on `/api/files` (download resolution)
 
-If `/api/search` and `/api/details` work but `/api/files` (or `/api/download`)
-fails with something like:
+**Status: confirmed.** After redeploying with the fixed dependency install
+(see Dockerfile), `/api/files` and `/api/download` still return the same
+403 from `h5.aoneroom.com`. That rules out the dependency theory — this is
+almost certainly IP-based blocking of Render's server IP ranges by
+Cloudflare (or similar), not a code bug. Multiple independent "Moviebox
+API" wrapper projects specifically advertise "Cloudflare bypass" as a
+feature for this exact endpoint, which is a strong tell.
+
+Try these in order — cheapest/lowest-risk first:
+
+### Tier 1 — switch mirrors (free, try this first)
+
+`MOVIEBOX_API_HOST` is a supported env var. Per the maintainer's own
+[issue #27](https://github.com/Simatwa/moviebox-api/issues/27), known
+alternates include: `moviebox.ph`, `moviebox.ke`, `moviebox.pk`,
+`moviebox.id`, `movieboxapp.in`, `netnaija.video`, `netnaija.com`,
+`sflix.film`, `moviebox.ng`.
+
+In Render's dashboard, set an environment variable:
+```
+MOVIEBOX_API_HOST=moviebox.ph
+```
+(or try a couple of the others — no code change, no redeploy needed beyond
+the env var, just restart the service.) If a different mirror isn't behind
+the same Cloudflare rule, this alone fixes it for free.
+
+### Tier 2 — route through a proxy (costs money, only if Tier 1 fails)
+
+`httpx` (used internally by this library) honours `HTTP_PROXY`/
+`HTTPS_PROXY` environment variables **by default**, unless the library
+explicitly disabled that — I couldn't find evidence either way in the
+public docs, so this isn't guaranteed, but it's worth trying since it needs
+no code change either:
 
 ```
-403 Forbidden for url 'https://h5.aoneroom.com/wefeed-h5-bff/web/subject/download?...'
+HTTP_PROXY=http://username:password@proxy-host:port
+HTTPS_PROXY=http://username:password@proxy-host:port
 ```
 
-Two different things could be causing this — the Dockerfile now addresses
-the first one, but the second one has no code-level fix:
+**Important:** this needs a real **residential** proxy, not a free public
+proxy list — Cloudflare's whole point is blocking datacenter IPs, and free
+public proxies are almost always datacenter IPs too (often already
+blocklisted themselves). Residential proxy providers (Webshare, IPRoyal,
+Smartproxy, Bright Data, and others) are the category to look at — check
+current pricing yourself since it changes, but expect this to be the first
+part of this whole project that isn't free, unlike the rest of your stack.
 
-1. **Missing dependency.** moviebox-api's own docs install it with
-   `pip install moviebox-api --no-deps` followed by manually installing
-   `pydantic==2.9.2 rich click bs4 httpx throttlebuster`. A plain
-   `pip install moviebox-api` (what this project originally did) may not
-   pull in `throttlebuster` the same way — and going by its name and the
-   fact the maintainer calls it out specifically, it may matter for this
-   more heavily-protected endpoint. **The Dockerfile now installs the
-   exact documented sequence** — redeploy and retest.
+### If neither works
 
-2. **IP-based Cloudflare blocking.** Multiple independent "Moviebox API"
-   wrapper projects specifically advertise "Cloudflare bypass" as a
-   feature for this exact download-resolution endpoint. A common pattern
-   for that kind of protection is blocking known cloud/hosting-provider IP
-   ranges (Render included) outright, while letting residential IPs
-   through — since scrapers overwhelmingly run from cloud IPs. If that's
-   what's happening, **no dependency or code change fixes it** — it's a
-   network-level block, not a bug.
-
-**How to tell which one you're hitting:** redeploy with the updated
-Dockerfile and retest `/api/files`. If it starts working, it was #1. If it
-still 403s identically, it's almost certainly #2 — at that point, the
-realistic options are either a different library built specifically around
-Cloudflare bypass (like the `fzmovies-api`/`fzseries-api` alternatives
-mentioned above, or other "Cloudflare bypass" wrapper projects that exist
-for this same site), or routing outbound requests through a residential
-proxy — both bigger changes than a quick patch, and probably more effort
-than a learning/portfolio project needs. Worth treating as a real lesson in
-why unofficial scrapers are inherently fragile, rather than chasing an
-arms race.
+That would mean the block is specifically fingerprinting the request
+itself (TLS/JA3 fingerprint, missing JS challenge solve) rather than just
+IP reputation — at that point, a proxy alone won't help either, and the
+realistic path is a library built specifically to solve that (the
+"Cloudflare bypass" wrapper projects mentioned above take a fundamentally
+different technical approach, not just a proxy). That's a bigger rewrite,
+not a config change — happy to look into it if Tier 1 and 2 both fail.
 
 ## Render free-tier considerations
 
