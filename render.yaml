@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: cymor-movie-api
+    env: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: CYMOR_HUB_ORIGIN
+        value: "*"
+      # Optional — only set this if the default moviebox.ph mirror gets
+      # blocked. Discover alternatives by running `moviebox v1 mirror-hosts`
+      # locally (requires the [cli] extra) — see README.
+      # - key: MOVIEBOX_API_HOST
+      #   value: h5.aoneroom.com
